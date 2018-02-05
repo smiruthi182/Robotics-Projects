@@ -1,0 +1,263 @@
+#include <RedBot.h>
+
+RedBotSensor left = RedBotSensor(A3);   // initialize a left sensor object on A3
+
+RedBotSensor center = RedBotSensor(A0); // initialize a center sensor object on A6
+
+RedBotSensor right = RedBotSensor(A1);  // initialize a right sensor object on A7
+
+ 
+
+RedBotEncoder encoder = RedBotEncoder(A2, 10);  // initializes encoder on pins A2 and 10
+
+RedBotAccel x1;               // enable accelermeter
+
+ 
+
+ 
+
+int countsPerRev = 192;   // 4 pairs of N-S x 48:1 gearbox = 192 ticks per wheel rev
+
+ 
+
+// variables used to store the left and right encoder counts.
+
+int lCount;
+
+int rCount;
+
+ 
+
+// constants that are used in the code. LINETHRESHOLD is the level to detect
+
+// if the sensor is on the line or not. If the sensor value is greater than this
+
+// the sensor is above a DARK line.
+
+//
+
+// SPEED sets the nominal speed
+
+ 
+
+#define LINETHRESHOLD 700     // thereshold set based on the sensitivity of the line sensors
+
+#define SPEED 80  // sets the nominal speed. Set to any number from 0 - 255.
+
+ 
+
+RedBotMotors motors;
+
+int leftSpeed;   // variable used to store the leftMotor speed
+
+int rightSpeed;  // variable used to store the rightMotor speed
+
+ 
+
+float wheelDiam = 2.56;  // diam = 65mm / 25.4 mm/in
+
+float wheelCirc = PI*wheelDiam;  // Redbot wheel circumference = pi*D
+
+ 
+
+void setup()
+
+{
+
+  Serial.begin(9600);
+
+  Serial.println("Project 1 - Line Following");
+
+  Serial.println("--------------------------");
+
+  delay(2000);
+
+  Serial.println("IR Sensors LEFT CENTER RIGHT DISTANCE");
+
+  delay(500);
+
+  x1.enableBump();            // accelarameter bump detection enabled
+
+  x1.setBumpThresh(80);       // sensitivity of the bump setpoint
+
+ 
+
+ 
+
+ 
+
+}
+
+ 
+
+void loop()
+
+{
+
+ 
+
+  if(x1.checkBump())        // checks for bump input
+
+ 
+
+  {
+
+    driveDistance(30);  // drive 30 inches,
+
+  }
+
+}
+
+ 
+
+void driveDistance(float distance)
+
+{
+
+  long lCount = 0;
+
+  long rCount = 0;
+
+  float numRev;
+
+  // debug
+
+ 
+
+ 
+
+ 
+
+  numRev = (float) distance / wheelCirc;
+
+ 
+
+  encoder.clearEnc(BOTH);  // clear the encoder count
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+  while (rCount < numRev*countsPerRev)
+
+  {
+
+    // while the left encoder is less than the target count -- debug print
+
+    // the encoder values and wait -- this is a holding loop.
+
+    lCount = encoder.getTicks(LEFT);
+
+    rCount = encoder.getTicks(RIGHT);
+
+ 
+
+    // if on the line drive left and right at the same speed (left is CCW / right is CW)
+
+  if(center.read() > LINETHRESHOLD && left.read() < LINETHRESHOLD && right.read() < LINETHRESHOLD)
+
+  {
+
+    leftSpeed = -SPEED;
+
+    rightSpeed = SPEED;
+
+  }
+
+ 
+
+  // if the line is under the right sensor, adjust relative speeds to turn to the right
+
+  else if(center.read() < LINETHRESHOLD && left.read() < LINETHRESHOLD && right.read() > LINETHRESHOLD)
+
+  {
+
+    leftSpeed = -(SPEED + 100);
+
+    rightSpeed = SPEED - 100;
+
+  }
+
+ 
+
+  // if the line is under the left sensor, adjust relative speeds to turn to the left
+
+  else if(center.read() < LINETHRESHOLD && left.read() > LINETHRESHOLD && right.read() < LINETHRESHOLD)
+
+  {
+
+    leftSpeed = -(SPEED - 100);
+
+    rightSpeed = SPEED + 100;
+
+  }
+
+ 
+
+  else if (left.read() > LINETHRESHOLD && center.read() > LINETHRESHOLD && right.read() < LINETHRESHOLD)
+
+  {
+
+    leftSpeed = (SPEED-80);
+
+    rightSpeed = (SPEED+80);  
+
+  }
+
+ 
+
+  // if all sensors are on black or up in the air, stop the motors.
+
+  // otherwise, run motors given the control speeds above.
+
+  if((left.read() > LINETHRESHOLD) && center.read() > LINETHRESHOLD && right.read() > LINETHRESHOLD )
+
+  {
+
+    motors.stop();
+
+  }
+
+  else
+
+  {
+
+    motors.leftMotor(leftSpeed);
+
+    motors.rightMotor(rightSpeed);
+
+    Serial.print(left.read());
+
+    Serial.print("\t");
+
+    Serial.print(center.read());
+
+    Serial.print("\t");
+
+    Serial.print(right.read());
+
+    Serial.print("\t");
+
+    Serial.print(rCount*.04);     // multipling by 0.04 converts pulses to inches
+
+    Serial.println();
+
+   
+
+  }
+
+  delay(0);  // add a delay to decrease sensitivity.
+
+  }
+
+  motors.brake();         // stop motors
+
+  delay(1000);
+
+}
