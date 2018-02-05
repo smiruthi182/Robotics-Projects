@@ -1,0 +1,296 @@
+#include &lt;RedBot.h&gt;
+#include &lt;math.h&gt;
+
+RedBotSensor left = RedBotSensor(A3); // initialize a left sensor object on A3
+RedBotSensor center = RedBotSensor(A0); // initialize a center sensor object on A6
+RedBotSensor right = RedBotSensor(A1); // initialize a right sensor object on A7
+
+RedBotEncoder encoder = RedBotEncoder(A2, 10); // initializes encoder on pins A2 and 10
+RedBotAccel x1; // enable accelermeter
+
+int countsPerRev = 192; // 4 pairs of N-S x 48:1 gearbox = 192 ticks per wheel rev
+// variables used to store the left and right encoder counts.
+int lCount;
+int rCount;
+
+// constants that are used in the code. LINETHRESHOLD is the level to detect
+// if the sensor is on the line or not. If the sensor value is greater than this
+// the sensor is above a DARK line.
+//
+// SPEED sets the nominal speed
+
+#define LINETHRESHOLD 920 // thereshold set based on the sensitivity of the line sensors
+#define SPEED 100 // sets the nominal speed. Set to any number from 0 - 255.
+
+RedBotMotors motors;
+int leftSpeed; // variable used to store the leftMotor speed
+int rightSpeed; // variable used to store the rightMotor speed
+int Speed = 100;
+int a = 7;
+int b = 8;
+
+int bump = 0;
+
+float theta = 0;
+float temp;
+float thetaDeg = 0;
+
+double theta1 = 0;
+
+double theta2 = 0;
+double theta3 = 0;
+double theta4 = 0;
+double theta5 = 0;
+
+double distance = 0;
+
+float x_dot = 0;
+float y_dot = 0;
+
+float Vr = 0;
+float Vl = 0;
+float distanceR = 0;
+float distanceL = 0;
+
+float currentAngle = 0;
+
+float wheelDiam = 2.56; // diam = 65mm / 25.4 mm/in
+float wheelCirc = PI * wheelDiam; // Redbot wheel circumference = pi*D
+
+float angle = 1.57;
+
+void setup()
+{
+
+Serial.begin(9600);
+Serial.println(&quot;Project 2 - Group 5&quot;);
+Serial.println(&quot;-- -- -- -- -- -- -- -- -- -- -- -- -- &quot;);
+
+
+// find angles
+theta1 = ((PI / 2) - atan2(b, a)) * (180 / PI);
+
+theta2 = 180 - 2 * theta1;
+theta3 = 2 * theta1;
+theta4 = theta2;
+theta5 = theta1;
+
+distance = (sqrt(a * a + b * b));
+
+
+Serial.print(&quot;a = &quot;);
+Serial.print(a);
+Serial.print(&quot;\t&quot;);
+Serial.print(&quot;b = &quot;);
+Serial.print(b);
+Serial.println();
+Serial.println(&quot;Theta1 Theta2 Theta3 Theta4 Theta5 Dist.&quot;);
+
+Serial.print(theta1);
+Serial.print(&quot;\t&quot;);
+Serial.print(theta2);
+Serial.print(&quot;\t&quot;);
+Serial.print(theta3);
+Serial.print(&quot;\t&quot;);
+Serial.print(theta4);
+Serial.print(&quot;\t&quot;);
+
+Serial.print(theta5);
+Serial.print(&quot;\t&quot;);
+Serial.print(distance);
+Serial.print(&quot;\t&quot;);
+Serial.println();
+Serial.print(&quot;lCount rCount Dist. X Y Angle&quot;);
+
+distance = distance - 2.5; // correction for overshoot
+
+delay(2000);
+
+x1.enableBump(); // accelarameter bump detection enabled
+x1.setBumpThresh(80); // sensitivity of the bump setpoint
+} // end of setup loop
+
+void loop()
+{
+
+while(bump != 1){
+if (x1.checkBump()) // checks for bump input
+{
+bump = 1;
+}
+
+}
+
+turnAngle(theta1 * 2.17);
+
+delay(1000);
+
+currentAngle = 90 - theta1;
+driveStraight(distance, Speed, currentAngle, 0, 0);
+delay(1000);
+
+turnAngle(theta2 * 2.17);
+delay(1000);
+driveStraight(distance, Speed, -currentAngle, a, b);
+delay(1000);
+
+turnAngle(theta3 * 2.17);
+
+currentAngle = 90 + theta1;
+delay(1000);
+driveStraight(distance, Speed, -currentAngle, 2 * a, 0);
+delay(1000);
+
+
+
+turnAngle(theta4 * 2.17);
+currentAngle = 180-theta2;
+delay(1000);
+driveStraight(distance, Speed, currentAngle, a, -b);
+delay(1000);
+
+turnAngle(theta5 * 2.17);
+motors.brake();
+
+// driveStraight(5.6875, 100);
+
+// motors.brake();
+
+bump = 0;
+
+// delay(5000);
+
+}
+
+void driveStraight(float distance, int motorPower, int angle, int intX, int intY)
+{
+long lCount = 0;
+long rCount = 0;
+long targetCount;
+long targetCountHalf;
+float numRev;
+
+// variables for tracking the left and right encoder counts
+long prevlCount, prevrCount;
+
+long lDiff, rDiff; // diff between current encoder count and previous count
+
+// variables for setting left and right motor power
+int leftPower = motorPower;
+
+int rightPower = motorPower;
+
+// variable used to offset motor power on right vs left to keep straight.
+int offset = 2; // offset amount to compensate Right vs. Left drive
+
+numRev = distance / wheelCirc; // calculate the target # of rotations
+targetCount = numRev * countsPerRev; // calculate the target count
+
+targetCountHalf = targetCount/2;
+// debug
+
+encoder.clearEnc(BOTH); // clear the encoder count
+delay(100); // short delay before starting the motors.
+Serial.println();
+motors.drive(motorPower); // start motors
+
+while (rCount &lt; targetCount)
+{
+// while the right encoder is less than the target count -- debug print
+// the encoder values and wait -- this is a holding loop.
+lCount = encoder.getTicks(LEFT);
+rCount = encoder.getTicks(RIGHT);
+
+motors.leftDrive(leftPower);
+motors.rightDrive(rightPower);
+
+// calculate the rotation &quot;speed&quot; as a difference in the count from previous cycle.
+
+lDiff = (lCount - prevlCount);
+rDiff = (rCount - prevrCount);
+
+// store the current count as the &quot;previous&quot; count for the next cycle.
+prevlCount = lCount;
+prevrCount = rCount;
+
+// if left is faster than the right, slow down the left / speed up right
+if (lDiff &gt; rDiff)
+{
+leftPower = leftPower - offset;
+rightPower = rightPower + offset;
+}
+// if right is faster than the left, speed up the left / slow down right
+else if (lDiff &lt; rDiff)
+{
+leftPower = leftPower + offset;
+rightPower = rightPower - offset;
+}
+delay(50); // short delay to give motors a chance to respond.
+
+
+Serial.println();
+Serial.print(lCount);
+Serial.print(&quot;\t&quot;);
+Serial.print(rCount);
+Serial.print(&quot;\t&quot;);
+
+getCoordinates(lCount, angle, intX, intY);
+
+if (rCount &lt; targetCountHalf || lCount &lt; targetCountHalf){
+leftPower = leftPower + 10;
+rightPower = rightPower + 10;
+}else{
+leftPower = leftPower - 15;
+rightPower = rightPower -15;
+
+}
+
+
+
+}
+// now apply &quot;brakes&quot; to stop the motors.
+motors.brake();
+
+}
+
+void turnAngle(int angle)
+{
+int turningSpeed = 180; // degreees / second
+
+long turningTime;
+turningTime = (long) 1000 * angle / turningSpeed;
+
+motors.rightMotor(-100); // Turn CCW at motorPower of 100
+motors.leftMotor(-100); // Turn CCW at motorPower of 100
+
+delay(turningTime); // turning Time
+motors.brake(); // brake() motors
+// delay(1000);
+
+}
+
+void getCoordinates(int lCount, int angle, int intX, int intY) {
+
+float x;
+float y;
+float angleRad;
+float angleTest = 0;
+
+distanceR = lCount * 0.0419;
+
+angleRad = angle * (PI / 180);
+
+y = distanceR * sin(angleRad) + intY;
+x = distanceR * cos(angleRad) + intX;
+
+angleTest = (atan2(y, x)) * (180 / PI);
+Serial.print(distanceR);
+Serial.print(&quot;\t&quot;);
+Serial.print(x);
+Serial.print(&quot;\t&quot;);
+Serial.print(y);
+Serial.print(&quot;\t&quot;);
+Serial.print(angleTest);
+delay(40);
+
+}
